@@ -22,6 +22,7 @@ import (
 	"uav/node/algorithm/gossip"
 	"uav/node/algorithm/raft"
 	"uav/node/algorithm/weaknet"
+	"uav/node/metrics"
 	"uav/node/runtime"
 	"uav/node/transport/udp"
 )
@@ -42,10 +43,14 @@ func main() {
 	// ── 1. Network transport layer ──────────────────────────────────────────
 	tr := udp.New(*addrFlag, 256)
 
+	// ── 1.5 Metrics collector ──────────────────────────────────────────────
+	mc := metrics.NewCollector(nodeID)
+
 	// ── 2. Node communication framework layer ──────────────────────────────
 	n := runtime.NewNode(nodeID, tr,
 		runtime.WithSendQueueSize(512),
 		runtime.WithRecvBufSize(256),
+		runtime.WithMetrics(mc),
 	)
 	for id, addr := range peers {
 		if err := n.AddPeer(id, addr); err != nil {
@@ -85,12 +90,20 @@ func main() {
 	}
 	log.Printf("[node %d] listening on %s", nodeID, tr.LocalAddr())
 
+	// ── Start metrics reporter ─────────────────────────────────────────────
+	reporter := metrics.NewReporter(mc, 5*time.Second,
+		metrics.WithCSVOutput(fmt.Sprintf("node_%d_metrics.csv", nodeID)),
+	)
+	reporter.Start()
+
 	// ── Graceful shutdown ────────────────────────────────────────────────────
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 
 	log.Printf("[node %d] shutting down…", nodeID)
+	reporter.Stop()
+	_ = reporter.FlushToFile(fmt.Sprintf("node_%d_final.json", nodeID))
 	n.Stop()
 }
 

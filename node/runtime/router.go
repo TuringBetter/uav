@@ -3,6 +3,7 @@ package runtime
 import (
 	"container/heap"
 	"sync"
+	"uav/node/metrics"
 	"uav/pkg/message"
 )
 
@@ -14,9 +15,9 @@ import (
 
 // queueItem wraps a message with heap metadata.
 type queueItem struct {
-	msg    message.Message
-	seq    uint64 // insertion order; used for FIFO tie-breaking within same priority
-	index  int    // heap internal index
+	msg   message.Message
+	seq   uint64 // insertion order; used for FIFO tie-breaking within same priority
+	index int    // heap internal index
 }
 
 // msgHeap implements heap.Interface for a min-heap of *queueItem.
@@ -55,16 +56,19 @@ type SendQueue struct {
 	notifyC chan struct{}
 	counter uint64
 	cap     int
+	mc      *metrics.Collector // optional; nil = no metrics
 }
 
 // NewSendQueue creates a SendQueue with the given capacity.
-func NewSendQueue(capacity int) *SendQueue {
+// mc is optional (nil = no metrics recording).
+func NewSendQueue(capacity int, mc *metrics.Collector) *SendQueue {
 	h := make(msgHeap, 0, capacity)
 	heap.Init(&h)
 	return &SendQueue{
 		h:       h,
 		notifyC: make(chan struct{}, 1),
 		cap:     capacity,
+		mc:      mc,
 	}
 }
 
@@ -81,6 +85,9 @@ func (q *SendQueue) Push(msg message.Message) {
 			}
 		}
 		heap.Remove(&q.h, worst.index)
+		if q.mc != nil {
+			q.mc.RecordQueueDrop()
+		}
 	}
 	q.counter++
 	heap.Push(&q.h, &queueItem{msg: msg, seq: q.counter})
@@ -178,15 +185,18 @@ type Router struct {
 	dupsMu  sync.Mutex
 	dups    map[uint16]*peerDedup // keyed by From (sender ID)
 	handler func(msg message.Message)
+	mc      *metrics.Collector // optional; nil = no metrics
 }
 
 // NewRouter creates a Router for the node identified by nodeID.
 // handler is called for every valid (non-expired, non-duplicate) message.
-func NewRouter(nodeID uint16, handler func(msg message.Message)) *Router {
+// mc is optional (nil = no metrics recording).
+func NewRouter(nodeID uint16, handler func(msg message.Message), mc *metrics.Collector) *Router {
 	return &Router{
 		nodeID:  nodeID,
 		dups:    make(map[uint16]*peerDedup),
 		handler: handler,
+		mc:      mc,
 	}
 }
 
@@ -194,11 +204,17 @@ func NewRouter(nodeID uint16, handler func(msg message.Message)) *Router {
 func (r *Router) Dispatch(msg message.Message) {
 	// 1. TTL expiry check.
 	if msg.IsExpired() {
+		if r.mc != nil {
+			r.mc.RecordTTLDrop()
+		}
 		return
 	}
 
 	// 2. Per-peer deduplication.
 	if r.isDuplicate(msg.From, msg.Seq) {
+		if r.mc != nil {
+			r.mc.RecordDedupDrop()
+		}
 		return
 	}
 

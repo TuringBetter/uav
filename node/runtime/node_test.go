@@ -187,7 +187,7 @@ func TestNode_PriorityQueue(t *testing.T) {
 
 	// Use a mock transport that captures outbound messages.
 	// (Full end-to-end test requires two nodes; here we verify queue ordering.)
-	sq := runtime.NewSendQueue(64)
+	sq := runtime.NewSendQueue(64, nil)
 
 	priorities := []message.Priority{
 		message.PriorityDebug,

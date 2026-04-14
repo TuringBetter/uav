@@ -15,7 +15,9 @@ import (
 	"sync/atomic"
 	"time"
 	"uav/node/algorithm"
+	"uav/node/metrics"
 	"uav/node/transport"
+	"uav/node/transport/codec"
 	"uav/pkg/message"
 )
 
@@ -28,6 +30,7 @@ type Node struct {
 	tm   *TimerManager
 	rt   *Router
 	algo algorithm.Algorithm
+	mc   *metrics.Collector // optional; nil = no metrics
 
 	seqCounter atomic.Uint32
 	stopCh     chan struct{}
@@ -39,6 +42,7 @@ type nodeOptions struct {
 	id            uint16
 	sendQueueSize int
 	recvBufSize   int
+	mc            *metrics.Collector
 }
 
 // Option is a functional option for Node construction.
@@ -49,6 +53,12 @@ func WithSendQueueSize(n int) Option { return func(o *nodeOptions) { o.sendQueue
 
 // WithRecvBufSize sets the inbound channel buffer depth.
 func WithRecvBufSize(n int) Option { return func(o *nodeOptions) { o.recvBufSize = n } }
+
+// WithMetrics attaches a metrics Collector to the node.
+// When set, every send/recv/drop event is recorded automatically.
+func WithMetrics(mc *metrics.Collector) Option {
+	return func(o *nodeOptions) { o.mc = mc }
+}
 
 // NewNode constructs a Node with the given transport.
 // id is this node's unique identifier (≥1).
@@ -62,14 +72,15 @@ func NewNode(id uint16, tr transport.Transport, opts ...Option) *Node {
 		cfg:    o,
 		tr:     tr,
 		pm:     NewPeerManager(),
-		sq:     NewSendQueue(o.sendQueueSize),
+		sq:     NewSendQueue(o.sendQueueSize, o.mc),
+		mc:     o.mc,
 		stopCh: make(chan struct{}),
 	}
 	n.rt = NewRouter(id, func(msg message.Message) {
 		if n.algo != nil {
 			n.algo.OnMessage(msg)
 		}
-	})
+	}, o.mc)
 	n.tm = NewTimerManager(func(name string) {
 		if n.algo != nil {
 			n.algo.OnTick(name)
@@ -126,6 +137,11 @@ func (n *Node) recvLoop() {
 			if !ok {
 				return
 			}
+			// Record inbound metrics.
+			if n.mc != nil {
+				wireBytes := message.HeaderSize + len(msg.Payload)
+				n.mc.RecordRecv(msg, wireBytes)
+			}
 			n.rt.Dispatch(msg)
 		}
 	}
@@ -148,7 +164,15 @@ func (n *Node) sendLoop() {
 				if !found {
 					continue // unknown peer; discard
 				}
-				_ = n.tr.Send(peer.Addr, msg)
+				err := n.tr.Send(peer.Addr, msg)
+				if n.mc != nil {
+					if err != nil {
+						n.mc.RecordSendError()
+					} else {
+						wireBytes, _ := codec.Encode(msg)
+						n.mc.RecordSend(msg, len(wireBytes))
+					}
+				}
 			}
 		}
 	}
@@ -212,4 +236,9 @@ func (n *Node) SetTimer(name string, d time.Duration) {
 // CancelTimer stops the named timer.
 func (n *Node) CancelTimer(name string) {
 	n.tm.Cancel(name)
+}
+
+// Metrics returns the attached metrics Collector (may be nil).
+func (n *Node) Metrics() *metrics.Collector {
+	return n.mc
 }
