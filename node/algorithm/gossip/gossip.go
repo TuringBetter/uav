@@ -35,10 +35,10 @@ type gossipPayload struct {
 type Algorithm struct {
 	node algorithm.NodeAPI
 
-	mu       sync.RWMutex
-	state    State          // local key-value state
-	seen     map[string]time.Time // (from:seq) → received-at; for dedup
-	seenTTL  time.Duration
+	mu      sync.RWMutex
+	state   State                // local key-value state
+	seen    map[string]time.Time // (from:seq) → received-at; for dedup
+	seenTTL time.Duration
 
 	fanout   int
 	interval time.Duration
@@ -82,6 +82,18 @@ func (a *Algorithm) Get(key string) (Entry, bool) {
 	defer a.mu.RUnlock()
 	e, ok := a.state[key]
 	return e, ok
+}
+
+// StateSnapshot returns a deep copy of the current state map.
+// Useful for external convergence checking without holding the lock.
+func (a *Algorithm) StateSnapshot() State {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	out := make(State, len(a.state))
+	for k, v := range a.state {
+		out[k] = v
+	}
+	return out
 }
 
 // Start registers the gossip timer and begins periodic rounds.
