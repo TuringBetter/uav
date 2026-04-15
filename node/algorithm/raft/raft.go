@@ -143,7 +143,7 @@ func New(node algorithm.NodeAPI, cfg RaftConfig, applyCb func(uint32, []byte)) *
 		state:      stateFollower,
 		nextIndex:  make(map[uint16]uint32),
 		matchIndex: make(map[uint16]uint32),
-		rng:        rand.New(rand.NewSource(time.Now().UnixNano())),
+		rng:        rand.New(rand.NewSource(time.Now().UnixNano() + int64(node.ID())*9999999)),
 		applyCb:    applyCb,
 	}
 }
@@ -337,11 +337,11 @@ func (a *Algorithm) sendAppendEntries(peerID uint16) {
 }
 
 func (a *Algorithm) handleRequestVote(from uint16, rv requestVote) {
-	reply := requestVoteReply{Kind: kindRequestVoteReply, Term: a.currentTerm}
-
 	if rv.Term > a.currentTerm {
 		a.stepDown(rv.Term)
 	}
+
+	reply := requestVoteReply{Kind: kindRequestVoteReply, Term: a.currentTerm}
 
 	lastIdx, lastTerm := a.lastLogInfo()
 	logOK := rv.LastLogTerm > lastTerm ||
