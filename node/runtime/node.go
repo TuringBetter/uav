@@ -32,10 +32,10 @@ type Node struct {
 	algo algorithm.Algorithm
 	mc   *metrics.Collector // optional; nil = no metrics
 
-	seqCounter atomic.Uint32
-	stopCh     chan struct{}
-	wg         sync.WaitGroup
-	once       sync.Once
+	seqCounters [256]atomic.Uint32
+	stopCh      chan struct{}
+	wg          sync.WaitGroup
+	once        sync.Once
 }
 
 type nodeOptions struct {
@@ -179,8 +179,8 @@ func (n *Node) sendLoop() {
 }
 
 // nextSeq atomically increments and returns the per-node sequence counter.
-func (n *Node) nextSeq() uint32 {
-	return n.seqCounter.Add(1)
+func (n *Node) nextSeq(streamID uint8) uint32 {
+	return n.seqCounters[streamID].Add(1)
 }
 
 // ─────────────────────────────────────────────
@@ -189,6 +189,11 @@ func (n *Node) nextSeq() uint32 {
 
 // ID returns this node's unique identifier.
 func (n *Node) ID() uint16 { return n.cfg.id }
+
+// Now returns the current time.
+func (n *Node) Now() time.Time {
+	return time.Now()
+}
 
 // Peers returns the IDs of all known peers.
 func (n *Node) Peers() []uint16 { return n.pm.List() }
@@ -204,9 +209,9 @@ func (n *Node) PeerAddr(peerID uint16) (string, bool) {
 func (n *Node) Send(peerID uint16, msg message.Message) error {
 	msg.From = n.cfg.id
 	msg.To = peerID
-	msg.Seq = n.nextSeq()
+	msg.Seq = n.nextSeq(msg.StreamID)
 	if msg.Timestamp == 0 {
-		msg.Timestamp = time.Now().UnixMilli()
+		msg.Timestamp = n.Now().UnixMilli()
 	}
 	n.sq.Push(msg)
 	return nil
@@ -222,7 +227,7 @@ func (n *Node) Broadcast(msg message.Message) error {
 	for _, peerID := range n.pm.List() {
 		m := msg
 		m.To = peerID
-		m.Seq = n.nextSeq()
+		m.Seq = n.nextSeq(m.StreamID)
 		n.sq.Push(m)
 	}
 	return nil

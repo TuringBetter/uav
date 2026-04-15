@@ -143,7 +143,7 @@ func New(node algorithm.NodeAPI, cfg RaftConfig, applyCb func(uint32, []byte)) *
 		state:      stateFollower,
 		nextIndex:  make(map[uint16]uint32),
 		matchIndex: make(map[uint16]uint32),
-		rng:        rand.New(rand.NewSource(time.Now().UnixNano() + int64(node.ID())*9999999)),
+		rng:        rand.New(rand.NewSource(node.Now().UnixNano() + int64(node.ID())*9999999)),
 		applyCb:    applyCb,
 	}
 }
@@ -376,7 +376,7 @@ func (a *Algorithm) sendAppendEntries(peerID uint16) {
 		Type:      message.TypeConsensus,
 		TTL:       message.TTLDefault,
 		Priority:  message.PriorityState,
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: a.node.Now().UnixMilli(),
 		Payload:   payload,
 	})
 }
@@ -405,7 +405,7 @@ func (a *Algorithm) handleRequestVote(from uint16, rv requestVote) {
 		Type:      message.TypeConsensus,
 		TTL:       message.TTLDefault,
 		Priority:  message.PriorityState,
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: a.node.Now().UnixMilli(),
 		Payload:   payload,
 	})
 }
@@ -434,7 +434,7 @@ func (a *Algorithm) handleAppendEntries(from uint16, ae appendEntries) {
 		payload, _ := json.Marshal(reply)
 		_ = a.node.Send(from, message.Message{
 			Type: message.TypeConsensus, Payload: payload,
-			Timestamp: time.Now().UnixMilli(),
+			Timestamp: a.node.Now().UnixMilli(),
 		})
 		return
 	}
@@ -455,7 +455,7 @@ func (a *Algorithm) handleAppendEntries(from uint16, ae appendEntries) {
 			payload, _ := json.Marshal(reply)
 			_ = a.node.Send(from, message.Message{
 				Type: message.TypeConsensus, Payload: payload,
-				Timestamp: time.Now().UnixMilli(),
+				Timestamp: a.node.Now().UnixMilli(),
 			})
 			return
 		}
@@ -489,7 +489,7 @@ func (a *Algorithm) handleAppendEntries(from uint16, ae appendEntries) {
 	payload, _ := json.Marshal(reply)
 	_ = a.node.Send(from, message.Message{
 		Type: message.TypeConsensus, Payload: payload,
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: a.node.Now().UnixMilli(),
 	})
 }
 

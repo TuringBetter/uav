@@ -22,23 +22,27 @@ type mockNode struct {
 func newMock(id uint16, peers []uint16) *mockNode {
 	return &mockNode{id: id, peers: peers}
 }
-func (m *mockNode) ID() uint16            { return m.id }
-func (m *mockNode) Peers() []uint16       { m.mu.Lock(); defer m.mu.Unlock(); return m.peers }
+func (m *mockNode) ID() uint16                     { return m.id }
+func (m *mockNode) Peers() []uint16                { m.mu.Lock(); defer m.mu.Unlock(); return m.peers }
 func (m *mockNode) PeerAddr(uint16) (string, bool) { return "", false }
-func (m *mockNode) Send(pid uint16, msg message.Message) error {
-	m.mu.Lock(); defer m.mu.Unlock()
-	msg.To = pid
+func (m *mockNode) Send(peerID uint16, msg message.Message) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.sent = append(m.sent, msg)
 	return nil
 }
+func (m *mockNode) Now() time.Time                      { return time.Now() }
 func (m *mockNode) Broadcast(msg message.Message) error { return nil }
 func (m *mockNode) SetTimer(string, time.Duration)      {}
 func (m *mockNode) CancelTimer(string)                  {}
 func (m *mockNode) sentCount() int {
-	m.mu.Lock(); defer m.mu.Unlock(); return len(m.sent)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.sent)
 }
 func (m *mockNode) lastSent() message.Message {
-	m.mu.Lock(); defer m.mu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	return m.sent[len(m.sent)-1]
 }
 

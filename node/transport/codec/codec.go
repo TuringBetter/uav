@@ -5,7 +5,7 @@
 //
 // Wire format:
 //
-//	[compressed:1][Type:1][From:2][To:2][Seq:4][Timestamp:8][TTL:2][Priority:1][PayloadLen:4][Payload:N]
+//	[compressed:1][Type:1][From:2][To:2][Seq:4][Timestamp:8][DataTime:8][StreamID:1][TTL:2][Priority:1][PayloadLen:4][Payload:N]
 //
 // When compressed == 1, the bytes after the first byte are zlib-compressed.
 // When compressed == 0, the remaining bytes follow the raw wire format above.
@@ -86,6 +86,10 @@ func encodeRaw(msg message.Message) []byte {
 	off += 4
 	le.PutUint64(buf[off:], uint64(msg.Timestamp))
 	off += 8
+	le.PutUint64(buf[off:], uint64(msg.DataTime))
+	off += 8
+	buf[off] = uint8(msg.StreamID)
+	off++
 	le.PutUint16(buf[off:], msg.TTL)
 	off += 2
 	buf[off] = uint8(msg.Priority)
@@ -116,6 +120,10 @@ func decodeRaw(data []byte) (message.Message, error) {
 	off += 4
 	msg.Timestamp = int64(le.Uint64(data[off:]))
 	off += 8
+	msg.DataTime = int64(le.Uint64(data[off:]))
+	off += 8
+	msg.StreamID = data[off]
+	off++
 	msg.TTL = le.Uint16(data[off:])
 	off += 2
 	msg.Priority = message.Priority(data[off])

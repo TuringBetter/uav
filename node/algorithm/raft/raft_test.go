@@ -29,19 +29,24 @@ func newMockNode(id uint16, peers []uint16) *mockNode {
 
 func (m *mockNode) ID() uint16 { return m.id }
 func (m *mockNode) Peers() []uint16 {
-	m.mu.Lock(); defer m.mu.Unlock(); return m.peers
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.peers
 }
 func (m *mockNode) PeerAddr(id uint16) (string, bool) { return "", false }
 func (m *mockNode) Send(peerID uint16, msg message.Message) error {
-	m.mu.Lock(); defer m.mu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.sent = append(m.sent, sentMsg{to: peerID, msg: msg})
 	return nil
 }
-func (m *mockNode) Broadcast(msg message.Message) error { return nil }
+func (m *mockNode) Now() time.Time                        { return time.Now() }
+func (m *mockNode) Broadcast(msg message.Message) error   { return nil }
 func (m *mockNode) SetTimer(name string, d time.Duration) {}
 func (m *mockNode) CancelTimer(name string)               {}
 func (m *mockNode) sentTo(peerID uint16) []message.Message {
-	m.mu.Lock(); defer m.mu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	var out []message.Message
 	for _, s := range m.sent {
 		if s.to == peerID {
@@ -141,7 +146,8 @@ func TestRaft_Propose(t *testing.T) {
 	var applied [][]byte
 	var mu sync.Mutex
 	cb := func(_ uint32, cmd []byte) {
-		mu.Lock(); defer mu.Unlock()
+		mu.Lock()
+		defer mu.Unlock()
 		applied = append(applied, cmd)
 	}
 
@@ -157,11 +163,11 @@ func TestRaft_Propose(t *testing.T) {
 	grant := `{"k":2,"term":1,"granted":true}`
 	for _, p := range []uint16{2, 3} {
 		r.OnMessage(message.Message{
-			Type:    message.TypeConsensus,
-			From:    p,
-			Seq:     1,
-			Payload: []byte(grant),
-			TTL:     message.TTLDefault,
+			Type:      message.TypeConsensus,
+			From:      p,
+			Seq:       1,
+			Payload:   []byte(grant),
+			TTL:       message.TTLDefault,
 			Timestamp: time.Now().UnixMilli(),
 		})
 	}

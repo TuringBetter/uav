@@ -8,10 +8,12 @@
 //	bytes 3–4  : To         (2 bytes)
 //	bytes 5–8  : Seq        (4 bytes)
 //	bytes 9–16 : Timestamp  (8 bytes)
-//	bytes 17–18: TTL        (2 bytes)
-//	byte  19   : Priority   (1 byte)
-//	bytes 20–23: PayloadLen (4 bytes)
-//	bytes 24+  : Payload    (PayloadLen bytes)
+//	bytes 17–24: DataTime   (8 bytes)
+//	byte  25   : StreamID   (1 byte)
+//	bytes 26–27: TTL        (2 bytes)
+//	byte  28   : Priority   (1 byte)
+//	bytes 29–32: PayloadLen (4 bytes)
+//	bytes 33+  : Payload    (PayloadLen bytes)
 package message
 
 import "time"
@@ -69,7 +71,7 @@ const BroadcastID uint16 = 0
 
 // HeaderSize is the fixed-size binary encoding of all Message fields excluding
 // the variable-length Payload bytes (PayloadLen field IS included in the header).
-const HeaderSize = 1 + 2 + 2 + 4 + 8 + 2 + 1 + 4 // = 24 bytes
+const HeaderSize = 1 + 2 + 2 + 4 + 8 + 8 + 1 + 2 + 1 + 4 // = 33 bytes
 
 // Message is the fundamental communication unit in the UAV network.
 // It carries a fixed binary header optimised for weak-network characteristics
@@ -79,9 +81,11 @@ type Message struct {
 	Type      MessageType // 消息类型（路由依据）
 	From      uint16      // 发送节点 ID（≥1；0 保留）
 	To        uint16      // 目标节点 ID（0 = 广播）
-	Seq       uint32      // 递增序列号（去重 / 乱序恢复）
+	Seq       uint32      // 每条流的递增序列号（去重 / 乱序恢复）
 	Timestamp int64       // 发送时间戳（Unix 毫秒）
-	TTL       uint16      // 有效期（ms）；0 = 永不过期
+	DataTime  int64       // 数据真实采样时间戳（仿真 / 插值）
+	StreamID  uint8       // 数据流分类 (0=pos, 1=vel, ...)，用于隔离去重
+	TTL       uint16      // 发送后的有效期（ms）；0 = 永不过期
 	Priority  Priority    // 优先级（0 = 最高）
 	Payload   []byte      // 算法自定义内容（由算法层编解码）
 }

@@ -129,48 +129,52 @@ const dedupWindowSize = 256
 // peerDedup tracks the deduplication state for one remote peer.
 type peerDedup struct {
 	mu      sync.Mutex
-	highest uint32
-	window  map[uint32]struct{}
-	inited  bool
+	highest [256]uint32
+	windows [256]map[uint32]struct{}
+	inited  [256]bool
 }
 
 func newPeerDedup() *peerDedup {
-	return &peerDedup{window: make(map[uint32]struct{}, dedupWindowSize)}
+	pd := &peerDedup{}
+	for i := range pd.windows {
+		pd.windows[i] = make(map[uint32]struct{}, dedupWindowSize)
+	}
+	return pd
 }
 
-// IsDuplicate returns true if seq has already been seen for this peer.
+// IsDuplicate returns true if seq has already been seen for this peer on this stream.
 // As a side-effect it records seq in the window.
-func (d *peerDedup) IsDuplicate(seq uint32) bool {
+func (d *peerDedup) IsDuplicate(streamID uint8, seq uint32) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if !d.inited {
-		d.highest = seq
-		d.inited = true
-		d.window[seq] = struct{}{}
+	if !d.inited[streamID] {
+		d.highest[streamID] = seq
+		d.inited[streamID] = true
+		d.windows[streamID][seq] = struct{}{}
 		return false
 	}
 
-	if seq > d.highest {
+	if seq > d.highest[streamID] {
 		// Advance window: evict entries that fell out of range.
 		cutoff := seq - uint32(dedupWindowSize) + 1
 		if seq >= uint32(dedupWindowSize) {
-			for k := range d.window {
+			for k := range d.windows[streamID] {
 				if k < cutoff {
-					delete(d.window, k)
+					delete(d.windows[streamID], k)
 				}
 			}
 		}
-		d.highest = seq
-	} else if d.highest-seq >= uint32(dedupWindowSize) {
+		d.highest[streamID] = seq
+	} else if d.highest[streamID]-seq >= uint32(dedupWindowSize) {
 		// Too old: treat as duplicate to drop stale replayed packets.
 		return true
 	}
 
-	if _, seen := d.window[seq]; seen {
+	if _, seen := d.windows[streamID][seq]; seen {
 		return true
 	}
-	d.window[seq] = struct{}{}
+	d.windows[streamID][seq] = struct{}{}
 	return false
 }
 
@@ -211,7 +215,7 @@ func (r *Router) Dispatch(msg message.Message) {
 	}
 
 	// 2. Per-peer deduplication.
-	if r.isDuplicate(msg.From, msg.Seq) {
+	if r.isDuplicate(msg.From, msg.StreamID, msg.Seq) {
 		if r.mc != nil {
 			r.mc.RecordDedupDrop()
 		}
@@ -222,7 +226,7 @@ func (r *Router) Dispatch(msg message.Message) {
 	r.handler(msg)
 }
 
-func (r *Router) isDuplicate(from uint16, seq uint32) bool {
+func (r *Router) isDuplicate(from uint16, streamID uint8, seq uint32) bool {
 	r.dupsMu.Lock()
 	d, ok := r.dups[from]
 	if !ok {
@@ -230,5 +234,5 @@ func (r *Router) isDuplicate(from uint16, seq uint32) bool {
 		r.dups[from] = d
 	}
 	r.dupsMu.Unlock()
-	return d.IsDuplicate(seq)
+	return d.IsDuplicate(streamID, seq)
 }

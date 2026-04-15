@@ -289,7 +289,7 @@ func (a *Algorithm) sendPushPull(peerID uint16, isReply bool) {
 		Type:      message.TypeState,
 		TTL:       message.TTLState,
 		Priority:  message.PriorityState,
-		Timestamp: time.Now().UnixMilli(),
+		Timestamp: a.node.Now().UnixMilli(),
 		Payload:   payload,
 	})
 }

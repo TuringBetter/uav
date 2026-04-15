@@ -61,7 +61,7 @@ func New(node algorithm.NodeAPI, fanout int, interval time.Duration) *Algorithm 
 		seenTTL:  5 * time.Second,
 		fanout:   fanout,
 		interval: interval,
-		rng:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		rng:      rand.New(rand.NewSource(node.Now().UnixNano() + int64(node.ID())*12345)),
 	}
 }
 
@@ -159,7 +159,7 @@ func (a *Algorithm) gossipRound() {
 			Type:      message.TypeState,
 			TTL:       message.TTLState,
 			Priority:  message.PriorityState,
-			Timestamp: time.Now().UnixMilli(),
+			Timestamp: a.node.Now().UnixMilli(),
 			Payload:   payload,
 		})
 	}

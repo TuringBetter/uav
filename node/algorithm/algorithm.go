@@ -45,6 +45,9 @@ type NodeAPI interface {
 	// PeerAddr returns the network address of the given peer, and whether it exists.
 	PeerAddr(peerID uint16) (addr string, ok bool)
 
+	// Now returns the current time (could be physical wall-clock or a virtual clock).
+	Now() time.Time
+
 	// Send enqueues a unicast message to peerID for delivery.
 	// The message is placed in the outbound priority queue.
 	Send(peerID uint16, msg message.Message) error

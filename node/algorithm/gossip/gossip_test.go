@@ -11,40 +11,50 @@ import (
 
 // mockNodeAPI is a lightweight stand-in for algorithm.NodeAPI.
 type mockNodeAPI struct {
-	mu      sync.Mutex
-	id      uint16
-	peers   []uint16
-	sent    []message.Message
-	timers  map[string]time.Duration
-	tickCb  func(string)
+	mu     sync.Mutex
+	id     uint16
+	peers  []uint16
+	sent   []message.Message
+	timers map[string]time.Duration
+	tickCb func(string)
 }
 
 func newMockNode(id uint16, peers []uint16) *mockNodeAPI {
 	return &mockNodeAPI{id: id, peers: peers, timers: make(map[string]time.Duration)}
 }
 
-func (m *mockNodeAPI) ID() uint16   { return m.id }
+func (m *mockNodeAPI) ID() uint16 { return m.id }
 func (m *mockNodeAPI) Peers() []uint16 {
-	m.mu.Lock(); defer m.mu.Unlock(); return m.peers
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.peers
 }
 func (m *mockNodeAPI) PeerAddr(id uint16) (string, bool) { return "", false }
 func (m *mockNodeAPI) Send(peerID uint16, msg message.Message) error {
-	m.mu.Lock(); defer m.mu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	msg.To = peerID
 	m.sent = append(m.sent, msg)
 	return nil
 }
 func (m *mockNodeAPI) Broadcast(msg message.Message) error { return nil }
+func (m *mockNodeAPI) Now() time.Time {
+	return time.Now()
+}
 func (m *mockNodeAPI) SetTimer(name string, d time.Duration) {
-	m.mu.Lock(); defer m.mu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.timers[name] = d
 }
 func (m *mockNodeAPI) CancelTimer(name string) {
-	m.mu.Lock(); defer m.mu.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.timers, name)
 }
 func (m *mockNodeAPI) sentCount() int {
-	m.mu.Lock(); defer m.mu.Unlock(); return len(m.sent)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.sent)
 }
 
 var _ algorithm.NodeAPI = (*mockNodeAPI)(nil)
