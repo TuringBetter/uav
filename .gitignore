@@ -1,0 +1,7 @@
+# 测试结果
+*_node*.json
+
+# 二进制文件
+bin
+*.exe
+*_bench

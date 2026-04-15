@@ -61,6 +61,7 @@
 ### 一键运行（推荐）
 ```bash
 cd /home/xr/workspace/uav
+go build ./cmd/gossip_bench/ 2>&1
 go run ./cmd/gossip_bench
 ```
 

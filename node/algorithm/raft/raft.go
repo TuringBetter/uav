@@ -187,6 +187,51 @@ func (a *Algorithm) LeaderID() uint16 {
 	return a.leaderID
 }
 
+// RaftStatus holds observable state for external inspection.
+type RaftStatus struct {
+	Role        string // "follower", "candidate", "leader"
+	Term        uint32
+	LeaderID    uint16
+	LogLen      int
+	CommitIndex uint32
+	LastApplied uint32
+}
+
+// StatusSnapshot returns a snapshot of the Raft node's current state.
+func (a *Algorithm) StatusSnapshot() RaftStatus {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	role := "follower"
+	switch a.state {
+	case stateCandidate:
+		role = "candidate"
+	case stateLeader:
+		role = "leader"
+	}
+	return RaftStatus{
+		Role:        role,
+		Term:        a.currentTerm,
+		LeaderID:    a.leaderID,
+		LogLen:      len(a.log),
+		CommitIndex: a.commitIndex,
+		LastApplied: a.lastApplied,
+	}
+}
+
+// CommitIndex returns the current commit index.
+func (a *Algorithm) CommitIndex() uint32 {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.commitIndex
+}
+
+// LogLen returns the current log length.
+func (a *Algorithm) LogLen() int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.log)
+}
+
 // ─── Algorithm interface ─────────────────────
 
 func (a *Algorithm) OnMessage(msg message.Message) {
