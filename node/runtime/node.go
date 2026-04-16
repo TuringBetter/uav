@@ -17,7 +17,6 @@ import (
 	"uav/node/algorithm"
 	"uav/node/metrics"
 	"uav/node/transport"
-	"uav/node/transport/codec"
 	"uav/pkg/message"
 )
 
@@ -108,7 +107,12 @@ func (n *Node) Start() error {
 	go n.recvLoop()
 	go n.sendLoop()
 	if n.algo != nil {
-		return n.algo.Start()
+		if err := n.algo.Start(); err != nil {
+			close(n.stopCh)
+			n.tr.Stop() //nolint:errcheck
+			n.wg.Wait()
+			return err
+		}
 	}
 	return nil
 }
@@ -169,8 +173,8 @@ func (n *Node) sendLoop() {
 					if err != nil {
 						n.mc.RecordSendError()
 					} else {
-						wireBytes, _ := codec.Encode(msg)
-						n.mc.RecordSend(msg, len(wireBytes))
+						wireBytes := message.HeaderSize + len(msg.Payload)
+						n.mc.RecordSend(msg, wireBytes)
 					}
 				}
 			}
@@ -207,6 +211,9 @@ func (n *Node) PeerAddr(peerID uint16) (string, bool) {
 // Send enqueues a unicast message to peerID.
 // It fills in From, Seq, and Timestamp automatically.
 func (n *Node) Send(peerID uint16, msg message.Message) error {
+	if _, ok := n.pm.Get(peerID); !ok {
+		return fmt.Errorf("unknown peer %d", peerID)
+	}
 	msg.From = n.cfg.id
 	msg.To = peerID
 	msg.Seq = n.nextSeq(msg.StreamID)
@@ -222,7 +229,7 @@ func (n *Node) Broadcast(msg message.Message) error {
 	msg.From = n.cfg.id
 	msg.To = message.BroadcastID
 	if msg.Timestamp == 0 {
-		msg.Timestamp = time.Now().UnixMilli()
+		msg.Timestamp = n.Now().UnixMilli()
 	}
 	for _, peerID := range n.pm.List() {
 		m := msg
